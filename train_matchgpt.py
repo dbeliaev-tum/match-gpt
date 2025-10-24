@@ -154,3 +154,45 @@ success_pipeline = Pipeline([
         n_jobs=-1
     ))
 ])
+
+# --- 4. Model Training ---
+
+# Split data for meeting prediction model (training set only)
+X_meet_train, _, y_meet_train, _ = train_test_split(X_meet, y_meet, test_size=0.15, random_state=58)
+meet_pipeline.fit(X_meet_train, y_meet_train)
+
+# Train success model only if sufficient data is available
+if len(X_success) > 3:
+    X_success_train, _, y_success_train, _ = train_test_split(X_success, y_success, test_size=0.15, random_state=58)
+    success_pipeline.fit(X_success_train, y_success_train)
+else:
+    success_pipeline = None
+
+
+# --- Feature Importance Analysis ---
+def get_feature_importances(pipeline, model_name):
+    """
+    Extract feature importances from trained pipeline and create results DataFrame.
+
+    Args:
+        pipeline: Trained sklearn pipeline with preprocessor and classifier
+        model_name (str): Model identifier for column naming
+
+    Returns:
+        pd.DataFrame: Feature names and their importance scores
+    """
+    # Get transformed feature names from preprocessing step
+    feature_names_out = pipeline.named_steps['preprocessor'].get_feature_names_out()
+
+    # Extract feature importance scores from RandomForest classifier
+    importances = pipeline.named_steps['classifier'].feature_importances_
+
+    # Create results DataFrame with feature names and importance scores
+    return pd.DataFrame({
+        "feature": feature_names_out,
+        f"importance_{model_name}": importances
+    })
+
+
+# Generate feature importance table for meeting prediction model
+meet_importances = get_feature_importances(meet_pipeline, "meeting")
