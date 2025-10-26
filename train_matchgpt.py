@@ -193,6 +193,34 @@ def get_feature_importances(pipeline, model_name):
         f"importance_{model_name}": importances
     })
 
-
 # Generate feature importance table for meeting prediction model
 meet_importances = get_feature_importances(meet_pipeline, "meeting")
+
+# Check if success model was trained and merge feature importance tables
+if success_pipeline:
+    success_importances = get_feature_importances(success_pipeline, "success")
+    # Merge importance tables by feature name, filling missing values with 0
+    factors_table = pd.merge(meet_importances, success_importances, on="feature", how="outer").fillna(0)
+else:
+    factors_table = meet_importances
+
+print("\nFeature Importance Table:")
+# Display top 15 most important features for meeting prediction
+print(factors_table.sort_values("importance_meeting", ascending=False).head(15))
+
+# --- Model Accuracy Evaluation ---
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+# For meeting prediction model - extract test data using indices
+X_meet_test = meet_data.drop(X_meet_train.index)  # Get test data using remaining indices
+y_meet_test = y_meet.drop(y_meet_train.index)
+
+# Generate predictions and calculate accuracy metrics
+y_meet_pred = meet_pipeline.predict(X_meet_test)
+meet_accuracy = accuracy_score(y_meet_test, y_meet_pred)
+
+print(f"\n📊 MEETING MODEL ACCURACY: {meet_accuracy:.2%}")
+print("Meeting Model Classification Report:")
+print(classification_report(y_meet_test, y_meet_pred))
+print("Meeting Model Confusion Matrix:")
+print(confusion_matrix(y_meet_test, y_meet_pred))
