@@ -224,3 +224,54 @@ print("Meeting Model Classification Report:")
 print(classification_report(y_meet_test, y_meet_pred))
 print("Meeting Model Confusion Matrix:")
 print(confusion_matrix(y_meet_test, y_meet_pred))
+
+# For success model (if it was trained and has sufficient data)
+if success_pipeline and len(X_success) > 10:
+    # Extract test data using indices from training split
+    X_success_test = success_data.drop(X_success_train.index)
+    y_success_test = y_success.drop(y_success_train.index)
+
+    # Generate predictions and calculate accuracy metrics
+    y_success_pred = success_pipeline.predict(X_success_test)
+    success_accuracy = accuracy_score(y_success_test, y_success_pred)
+
+    print(f"\n📊 SUCCESS MODEL ACCURACY: {success_accuracy:.2%}")
+    print("Success Model Classification Report:")
+    print(classification_report(y_success_test, y_success_pred))
+
+
+# --- Categorical Factor Impact Analysis ---
+def analyze_categorical_direction(pipeline, X_data, factor, target_name):
+    """
+    Analyze how different categorical values affect prediction probability.
+
+    Args:
+        pipeline: Trained sklearn pipeline
+        X_data: Feature dataset
+        factor: Categorical column name to analyze
+        target_name: Target variable name for reporting
+
+    Returns:
+        pd.DataFrame: Analysis results for each categorical value
+    """
+    # Calculate baseline probability
+    base_prob = pipeline.predict_proba(X_data)[:, 1].mean()
+    results = []
+
+    # Analyze impact of each categorical value
+    for value in X_data[factor].unique():
+        X_temp = X_data.copy()
+        X_temp[factor] = value
+        prob = pipeline.predict_proba(X_temp)[:, 1].mean()
+        direction = "↑ increases" if prob > base_prob else "↓ decreases"
+        results.append((factor, value, prob, prob - base_prob, direction))
+
+    return pd.DataFrame(results, columns=[
+        "Factor", "Value", f"P({target_name}=1)", "Δ from average", "Direction"
+    ])
+
+# Analyze categorical factors for meeting prediction
+cat_directions_meet = pd.concat(
+    [analyze_categorical_direction(meet_pipeline, X_meet, f, "meeting") for f in cat_cols],
+    ignore_index=True
+)
