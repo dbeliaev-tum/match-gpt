@@ -275,3 +275,21 @@ cat_directions_meet = pd.concat(
     [analyze_categorical_direction(meet_pipeline, X_meet, f, "meeting") for f in cat_cols],
     ignore_index=True
 )
+
+# Sort by "Δ from average" value (descending order)
+cat_directions_meet_sorted = cat_directions_meet.sort_values('Δ from average', ascending=False)
+
+print("\nCategorical Factors (Meeting) - Sorted by Impact:")
+print(cat_directions_meet_sorted.to_string(index=False))
+
+# For relationship success analysis
+if success_pipeline:
+    cat_directions_success = pd.concat(
+        [analyze_categorical_direction(success_pipeline, X_success, f, "success") for f in cat_cols],
+        ignore_index=True
+    )
+    # Sort by "Δ from average" value (descending order)
+    cat_directions_success_sorted = cat_directions_success.sort_values('Δ from average', ascending=False)
+
+    print("\nCategorical Factors (Success) - Sorted by Impact:")
+    print(cat_directions_success_sorted.to_string(index=False))
