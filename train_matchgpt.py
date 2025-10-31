@@ -293,3 +293,51 @@ if success_pipeline:
 
     print("\nCategorical Factors (Success) - Sorted by Impact:")
     print(cat_directions_success_sorted.to_string(index=False))
+
+
+# --- Numerical Factor Impact Analysis ---
+def plot_factor_influence(pipeline, X_data, factor, target_name):
+    """
+    Plot how numerical factors influence prediction probability.
+
+    Args:
+        pipeline: Trained sklearn pipeline
+        X_data: Feature dataset
+        factor: Numerical column name to analyze
+        target_name: Target variable name for plot labels
+    """
+    # Create range of values from min to max of the factor
+    values = np.linspace(X_data[factor].min(), X_data[factor].max(), 30)
+    probs = []
+
+    # Calculate probability for each value in the range
+    for value in values:
+        X_temp = X_data.copy()
+        X_temp[factor] = value
+        probs.append(pipeline.predict_proba(X_temp)[:, 1].mean())
+
+    # Create influence plot
+    plt.plot(values, probs, marker='o')
+    plt.xlabel(factor)
+    plt.ylabel(f"P({target_name}=1)")
+    plt.title(f"{factor} Impact on {target_name}")
+    plt.grid(True)
+    plt.show()
+
+# Analyze age and height influence on meeting probability
+plot_factor_influence(meet_pipeline, X_meet, "age", "meeting")
+plot_factor_influence(meet_pipeline, X_meet, "height_num", "meeting")
+
+# Analyze age and height influence on relationship success
+if success_pipeline:
+    plot_factor_influence(success_pipeline, X_success, "age", "success")
+    plot_factor_influence(success_pipeline, X_success, "height_num", "success")
+
+# --- 5. Model Persistence ---
+# Save trained models for future use
+joblib.dump(meet_pipeline, "meet_model.pkl")
+print("✓ Meeting model saved: meet_model.pkl")
+
+if success_pipeline:
+    joblib.dump(success_pipeline, "success_model.pkl")
+    print("✓ Success model saved: success_model.pkl")
