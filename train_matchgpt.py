@@ -1,5 +1,42 @@
+"""
+Dual-Prediction Match Analysis: Meeting Probability & Relationship Success Forecasting
+
+Project Overview:
+This machine learning pipeline implements a two-stage prediction system for dating analytics:
+1. Meeting Prediction Model: Forecasts likelihood of two people meeting based on demographic and platform data
+2. Relationship Success Model: Predicts relationship success probability for users who actually met
+
+Key Features:
+- Comprehensive data preprocessing with height normalization and categorical encoding
+- Dual Random Forest classifiers with balanced class weights for imbalanced datasets
+- Feature importance analysis for both numerical and categorical factors
+- Model performance evaluation with accuracy metrics and classification reports
+- Interactive visualization of factor impacts on prediction probabilities
+
+Dataset Structure:
+- Demographic features: age, height, body_type, region_origin, employment sphere
+- Platform features: app_source, chat_channel, activity patterns
+- Relationship metrics: sex_quality, emotional_comfort, chemistry, communication compatibility
+- Target variables: met (binary), relationship_outcome (binary)
+
+Model Architecture:
+- Preprocessing: OneHotEncoding for categorical features, passthrough for numerical
+- Algorithms: RandomForestClassifier with optimized hyperparameters
+- Evaluation: Train-test split with stratification, comprehensive metrics
+
+Business Applications:
+- Dating platform optimization through feature importance insights
+- User matching algorithm enhancement
+- Relationship coaching and compatibility analysis
+
+Author: DenisBeliaev
+Date: August 2025
+Version: 1.0
+"""
+
 # MatchGPT
 # AI-powered insights into your dating life success
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -21,7 +58,6 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 #          emotional_comfort, chemistry, communication_style_match,
 #          relationship_outcome, activity
 data = pd.read_csv("match_gpt_testset.csv")
-
 
 def process_height(height_value):
     """
