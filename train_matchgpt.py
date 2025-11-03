@@ -41,9 +41,14 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
 import matplotlib.pyplot as plt
 import joblib
 import warnings
@@ -138,10 +143,40 @@ Define separate preprocessing and modeling pipelines for two prediction tasks:
 """
 
 # --- Feature Column Definitions ---
+data['age_height_interaction'] = data['age'] * data['height_num']
+meet_data['age_height_interaction'] = meet_data['age'] * meet_data['height_num']
+if len(success_data) > 0:
+    success_data['age_height_interaction'] = success_data['age'] * success_data['height_num']
+
+X_meet = meet_data[[
+    'age', 'height_num', 'age_height_interaction', 'body_type', 'region_origin',
+    'sphere_of_employment', 'app_source', 'chat_channel'
+]]
+y_meet = meet_data['met']
+
+if len(success_data) > 0:
+    X_success = success_data[[
+        'age', 'height_num', 'age_height_interaction', 'body_type', 'region_origin',
+        'sphere_of_employment', 'app_source', 'chat_channel',
+        'activity', 'sex_quality', 'emotional_comfort',
+        'chemistry', 'communication_style_match'
+    ]]
+    y_success = success_data['relationship_outcome'].apply(lambda x: 1 if x >= 1 else 0)
+
+cat_cols_meet = [
+    'body_type', 'region_origin', 'sphere_of_employment',
+    'app_source', 'chat_channel'
+]
+
+cat_cols_success = [
+    'body_type', 'region_origin', 'sphere_of_employment',
+    'app_source', 'chat_channel', 'activity'
+]
+
 # Define feature sets to ensure consistency across pipelines
-NUMERICAL_FEATURES_MEET = ['age', 'height_num']
+NUMERICAL_FEATURES_MEET = ['age', 'height_num', 'age_height_interaction']
 NUMERICAL_FEATURES_SUCCESS = [
-    'age', 'height_num', 'sex_quality', 'emotional_comfort',
+    'age', 'height_num', 'age_height_interaction', 'sex_quality', 'emotional_comfort',
     'chemistry', 'communication_style_match'
 ]
 
@@ -149,18 +184,18 @@ NUMERICAL_FEATURES_SUCCESS = [
 # Meeting prediction preprocessor: handles numerical and categorical features
 meet_preprocessor = ColumnTransformer(
     transformers=[
-        ('num', 'passthrough', NUMERICAL_FEATURES_MEET),  # Numerical features: no transformation
-        ('cat', OneHotEncoder(handle_unknown='ignore'), cat_cols)  # Categorical: one-hot encoding
+        ('num', 'passthrough', NUMERICAL_FEATURES_MEET),
+        ('cat', OneHotEncoder(handle_unknown='ignore'), cat_cols_meet)
     ],
-    remainder='drop',  # Explicitly drop unused columns for safety
-    verbose_feature_names_out=False  # Cleaner feature names after transformation
+    remainder='drop',
+    verbose_feature_names_out=False
 )
 
 # Relationship success preprocessor: includes compatibility metrics
 success_preprocessor = ColumnTransformer(
     transformers=[
-        ('num', 'passthrough', NUMERICAL_FEATURES_SUCCESS),  # Includes post-meeting metrics
-        ('cat', OneHotEncoder(handle_unknown='ignore'), cat_cols)
+        ('num', 'passthrough', NUMERICAL_FEATURES_SUCCESS),
+        ('cat', OneHotEncoder(handle_unknown='ignore'), cat_cols_success)
     ],
     remainder='drop',
     verbose_feature_names_out=False
@@ -168,25 +203,30 @@ success_preprocessor = ColumnTransformer(
 
 # --- Model Pipelines ---
 # Meeting prediction pipeline with balanced class weights for imbalanced data
-meet_pipeline = Pipeline([
+meet_pipeline = ImbPipeline([
     ('preprocessor', meet_preprocessor),
+    ('smote', SMOTE(random_state=42)),
     ('classifier', RandomForestClassifier(
-        n_estimators=400,        # Large ensemble for robust performance
-        class_weight='balanced', # Handle class imbalance in meeting outcomes
-        random_state=42,         # Reproducibility
-        max_depth=7,             # Prevent overfitting, limit tree complexity
-        n_jobs=-1                # Utilize all CPU cores for training
+        n_estimators=400,
+        class_weight='balanced',
+        random_state=42,
+        max_depth=7,
+        n_jobs=-1
     ))
 ])
 
 # Relationship success pipeline with slightly simpler trees (less data available)
-success_pipeline = Pipeline([
+success_pipeline = ImbPipeline([
     ('preprocessor', success_preprocessor),
+    ('smote', SMOTE(random_state=42)),
     ('classifier', RandomForestClassifier(
-        n_estimators=400,
-        class_weight='balanced',  # Important for potentially imbalanced success outcomes
+        n_estimators=500,
+        max_depth=8,
+        min_samples_split=5,
+        min_samples_leaf=2,
+        max_features='sqrt',
+        class_weight='balanced',
         random_state=42,
-        max_depth=5,              # More restrictive due to smaller dataset size
         n_jobs=-1
     ))
 ])
@@ -194,16 +234,22 @@ success_pipeline = Pipeline([
 # --- 4. Model Training ---
 
 # Split data for meeting prediction model (training set only)
-X_meet_train, _, y_meet_train, _ = train_test_split(X_meet, y_meet, test_size=0.15, random_state=58)
+X_meet_train, X_meet_test, y_meet_train, y_meet_test = train_test_split(
+    X_meet, y_meet, test_size=0.15, random_state=58, stratify=y_meet
+)
+
 meet_pipeline.fit(X_meet_train, y_meet_train)
 
 # Train success model only if sufficient data is available
 if len(X_success) > 3:
-    X_success_train, _, y_success_train, _ = train_test_split(X_success, y_success, test_size=0.15, random_state=58)
+    X_success_train, X_success_test, y_success_train, y_success_test = train_test_split(
+        X_success, y_success, test_size=0.15, random_state=58, stratify=y_success
+    )
     success_pipeline.fit(X_success_train, y_success_train)
 else:
     success_pipeline = None
-
+    X_success_test = None
+    y_success_test = None
 
 # --- Feature Importance Analysis ---
 def get_feature_importances(pipeline, model_name):
@@ -262,12 +308,7 @@ print("Meeting Model Confusion Matrix:")
 print(confusion_matrix(y_meet_test, y_meet_pred))
 
 # For success model (if it was trained and has sufficient data)
-if success_pipeline and len(X_success) > 10:
-    # Extract test data using indices from training split
-    X_success_test = success_data.drop(X_success_train.index)
-    y_success_test = y_success.drop(y_success_train.index)
-
-    # Generate predictions and calculate accuracy metrics
+if success_pipeline and X_success_test is not None:
     y_success_pred = success_pipeline.predict(X_success_test)
     success_accuracy = accuracy_score(y_success_test, y_success_pred)
 
