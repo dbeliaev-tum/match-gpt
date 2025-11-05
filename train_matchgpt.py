@@ -31,7 +31,7 @@ Business Applications:
 
 Author: DenisBeliaev
 Date: August 2025
-Version: 2.0
+Version: 3.0
 """
 
 import pandas as pd
@@ -44,6 +44,7 @@ from sklearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from scipy.interpolate import make_interp_spline
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
@@ -112,7 +113,8 @@ cat_cols_meet = [
 
 cat_cols_success = [
     'body_type', 'region_origin', 'sphere_of_employment',
-    'app_source', 'chat_channel', 'activity'
+    'app_source', 'chat_channel'
+    #, 'activity'
 ]
 
 NUMERICAL_FEATURES_MEET = ['age', 'height_num', 'age_height_interaction']
@@ -215,15 +217,6 @@ else:
 
 # --- 5. MODEL EVALUATION AND REPORTING ---
 
-print("\n📊 Cross-Validation Results (Meeting Model):")
-for metric in ['accuracy', 'precision', 'recall', 'f1']:
-    print(f"  {metric.capitalize()}: {cv_results_meet[f'test_{metric}'].mean():.3f} (±{cv_results_meet[f'test_{metric}'].std():.3f})")
-
-if success_pipeline:
-    print("\n📊 Cross-Validation Results (Success Model):")
-    for metric in ['accuracy', 'precision', 'recall', 'f1']:
-        print(f"  {metric.capitalize()}: {cv_results_success[f'test_{metric}'].mean():.3f} (±{cv_results_success[f'test_{metric}'].std():.3f})")
-
 # --- Feature Importance Analysis ---
 def get_feature_importances(pipeline, model_name):
     """Extract feature importances from trained pipeline and create results DataFrame"""
@@ -244,9 +237,9 @@ if success_pipeline:
 else:
     factors_table = meet_importances
 
-print("\nFeature Importance Table (Sorted by Meeting Importance):")
-# Sort by importance_meeting in descending order as requested
-print(factors_table.sort_values("importance_meeting", ascending=False).head(15))
+print("\nMEET FEATURE IMPORTANCE TABLE")
+meet_sorted = factors_table[['feature', 'importance_meeting']].sort_values('importance_meeting', ascending=False).head(14)
+print(meet_sorted.to_string(index=False))
 
 # --- Model Performance Reporting ---
 y_meet_pred = meet_pipeline.predict(X_meet_test)
@@ -257,6 +250,15 @@ print("Meeting Model Classification Report:")
 # Remove support from classification report
 print(classification_report(y_meet_test, y_meet_pred, digits=2))
 
+print("\n📊 Cross-Validation Results (Meeting Model):")
+for metric in ['accuracy', 'precision', 'recall', 'f1']:
+    print(f"  {metric.capitalize()}: {cv_results_meet[f'test_{metric}'].mean():.3f} (±{cv_results_meet[f'test_{metric}'].std():.3f})")
+
+if success_pipeline:
+    print("\nSUCCESS FEATURE IMPORTANCE TABLE")
+    success_sorted = factors_table[['feature', 'importance_success']].sort_values('importance_success', ascending=False).head(14)
+    print(success_sorted.to_string(index=False))
+
 if success_pipeline and X_success_test is not None:
     y_success_pred = success_pipeline.predict(X_success_test)
     success_accuracy = accuracy_score(y_success_test, y_success_pred)
@@ -265,6 +267,11 @@ if success_pipeline and X_success_test is not None:
     print("Success Model Classification Report:")
     # Remove support from classification report
     print(classification_report(y_success_test, y_success_pred, digits=2))
+
+    print("\n📊 Cross-Validation Results (Success Model):")
+    for metric in ['accuracy', 'precision', 'recall', 'f1']:
+        print(
+            f"  {metric.capitalize()}: {cv_results_success[f'test_{metric}'].mean():.3f} (±{cv_results_success[f'test_{metric}'].std():.3f})")
 
 # --- Categorical Factor Impact Analysis ---
 def analyze_categorical_direction(pipeline, X_data, factor, target_name):
@@ -306,31 +313,69 @@ if success_pipeline:
     print(cat_directions_success_sorted.to_string(index=False))
 
 # --- Numerical Factor Impact Analysis ---
-def plot_factor_influence(pipeline, X_data, factor, target_name):
-    """Plot how numerical factors influence prediction probability"""
+def plot_factor_influence(pipeline, X_data, factor, target_name, y_step=None):
+    """
+    Visualize the relationship between numerical features and prediction probabilities.
+
+    Creates smoothed probability curves using spline interpolation for better
+    visualization of feature impact trends.
+
+    Args:
+        pipeline: Trained sklearn pipeline with preprocessor and classifier
+        X_data: Feature dataset for analysis
+        factor: Numerical feature name to analyze
+        target_name: Target variable name for plot labeling
+        y_step: Optional step size for Y-axis ticks to control granularity
+    """
+    # Generate base range of values for probability calculation
     values = np.linspace(X_data[factor].min(), X_data[factor].max(), 30)
     probs = []
 
+    # Calculate prediction probabilities across the feature value range
     for value in values:
         X_temp = X_data.copy()
         X_temp[factor] = value
         probs.append(pipeline.predict_proba(X_temp)[:, 1].mean())
 
-    plt.plot(values, probs, marker='o')
-    plt.xlabel(factor)
-    plt.ylabel(f"P({target_name}=1)")
-    plt.title(f"{factor} Impact on {target_name}")
-    plt.grid(True)
+    # Apply spline interpolation for smooth curve visualization
+    x_smooth = np.linspace(values.min(), values.max(), 200)
+    spline = make_interp_spline(values, probs)
+    y_smooth = spline(x_smooth)
+
+    # Initialize plot with optimized dimensions
+    plt.figure(figsize=(6, 4))
+
+    # Plot smoothed probability curve with mint color scheme
+    plt.plot(x_smooth, y_smooth, color="#3EB489", linewidth=2.5)
+
+    # Configure axis labels and title
+    plt.xlabel(factor, fontsize=11)
+    plt.ylabel(f"P({target_name}=1)", fontsize=11)
+    plt.title(f"{factor} Impact on {target_name}", fontsize=12, pad=10)
+
+    # Add subtle grid for better readability
+    plt.grid(alpha=0.3)
+
+    # Apply custom Y-axis tick spacing if specified
+    if y_step is not None:
+        ymin, ymax = min(y_smooth), max(y_smooth)
+        plt.yticks(np.arange(round(ymin, 3), round(ymax + y_step, 3), y_step))
+
+    # Optimize layout and render plot
+    plt.tight_layout()
     plt.show()
 
-# Analyze age and height influence on meeting probability
-plot_factor_influence(meet_pipeline, X_meet, "age", "meeting")
-plot_factor_influence(meet_pipeline, X_meet, "height_num", "meeting")
+# --- Execute Factor Influence Analysis ---
 
-# Analyze age and height influence on relationship success
+# Analyze feature impacts on meeting probability
+plot_factor_influence(meet_pipeline, X_meet, "age", "meeting", y_step=0.065)
+plot_factor_influence(meet_pipeline, X_meet, "height_num", "meeting", y_step=0.03)
+
+# Analyze feature impacts on relationship success probability
 if success_pipeline:
-    plot_factor_influence(success_pipeline, X_success, "age", "success")
-    plot_factor_influence(success_pipeline, X_success, "height_num", "success")
+    plot_factor_influence(success_pipeline, X_success, "age", "success", y_step=0.005)
+    plot_factor_influence(success_pipeline, X_success, "height_num", "success", y_step=0.0025)
+
 
 # --- 6. MODEL PERSISTENCE ---
 joblib.dump(meet_pipeline, "meet_model.pkl")
