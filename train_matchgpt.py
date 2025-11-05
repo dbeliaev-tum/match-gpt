@@ -40,16 +40,14 @@ from sklearn.model_selection import train_test_split, cross_val_score, Stratifie
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.impute import SimpleImputer
 from scipy.interpolate import make_interp_spline
 import matplotlib.pyplot as plt
-import seaborn as sns
 import joblib
 import warnings
-from sklearn.impute import SimpleImputer
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -247,8 +245,14 @@ meet_accuracy = accuracy_score(y_meet_test, y_meet_pred)
 
 print(f"\n📊 MEETING MODEL ACCURACY: {meet_accuracy:.2%}")
 print("Meeting Model Classification Report:")
-# Remove support from classification report
-print(classification_report(y_meet_test, y_meet_pred, digits=2))
+report_dict_meet = classification_report(y_meet_test, y_meet_pred, digits=2, output_dict=True)
+for key in ['0', '1', 'macro avg', 'weighted avg']:
+    if 'support' in report_dict_meet[key]:
+        del report_dict_meet[key]['support']
+df_report = pd.DataFrame(report_dict_meet).T
+if 'accuracy' in df_report.index:
+    df_report = df_report.drop('accuracy')
+print(df_report.to_string(float_format="%.2f"))
 
 print("\n📊 Cross-Validation Results (Meeting Model):")
 for metric in ['accuracy', 'precision', 'recall', 'f1']:
@@ -265,8 +269,14 @@ if success_pipeline and X_success_test is not None:
 
     print(f"\n📊 SUCCESS MODEL ACCURACY: {success_accuracy:.2%}")
     print("Success Model Classification Report:")
-    # Remove support from classification report
-    print(classification_report(y_success_test, y_success_pred, digits=2))
+    report_dict_success = classification_report(y_success_test, y_success_pred, digits=2, output_dict=True)
+    for key in ['0', '1', 'macro avg', 'weighted avg']:
+        if 'support' in report_dict_success[key]:
+            del report_dict_success[key]['support']
+    df_report = pd.DataFrame(report_dict_success).T
+    if 'accuracy' in df_report.index:
+        df_report = df_report.drop('accuracy')
+    print(df_report.to_string(float_format="%.2f"))
 
     print("\n📊 Cross-Validation Results (Success Model):")
     for metric in ['accuracy', 'precision', 'recall', 'f1']:
