@@ -161,12 +161,9 @@ Both models undergo comprehensive evaluation:
 
 ## 🔮 Future Enhancements
 
+- Improvement of user's personal life experience
 - Integration with real-time dating platform APIs
 - Additional compatibility metrics
 - Advanced ensemble methods
 - Mobile application interface
 - A/B testing framework for model validation
-
----
-
-*For questions or contributions, please contact the project maintainer.*
